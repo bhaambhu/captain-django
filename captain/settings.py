@@ -49,6 +49,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+CSRF_TRUSTED_ORIGINS = ['https://captain-django-production.up.railway.app']
+
 ROOT_URLCONF = 'captain.urls'
 
 TEMPLATES = [
