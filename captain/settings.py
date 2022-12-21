@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-otsr9jw75hgp@yao2iddyq8ql&&x02kc5y&jn0l+g^y68oum+2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['captain-django-production.up.railway.app']
+ALLOWED_HOSTS = ['127.0.0.1', 'captain-django-production.up.railway.app']
 
 
 # Application definition
@@ -54,7 +54,7 @@ ROOT_URLCONF = 'captain.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
