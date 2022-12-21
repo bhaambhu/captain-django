@@ -6,3 +6,4 @@ psycopg2==2.9.5
 pycodestyle==2.10.0
 sqlparse==0.4.3
 tomli==2.0.1
+whitenoise==6.2.0
