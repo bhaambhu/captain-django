@@ -137,14 +137,15 @@ class Children(generics.ListCreateAPIView):
 class SubjectList(generics.ListCreateAPIView):
     permission_classes = []
     # querysetSingle = Subject.objects.filter(id=1)
-    # try:
-    #     queryset = Subject.objects.get(id=1).get_children()
-    # except:
-    #     r = Subject(id=1, name='root')
-    #     r.save()
-    #     queryset = Subject.objects.get(id=1).get_children()
-    queryset = Subject.objects.get(id=1).get_children()
-    
+    try:
+        queryset = Subject.objects.get(id=1).get_children()
+    except:
+        r = Subject(id=1, name='root')
+        r.save()
+        queryset = Subject.objects.get(id=1).get_children()
+    # queryset = Subject.objects.get(id=1).get_children()
+    # queryset = Subject.objects.all()
+
     # queryset = querysetSingle | querysetSingle[0].get_children()
     # queryset = Subject.objects.filter(Q(level=0) | Q(parent__level = 0))
     serializer_class = SubjectSerializer
