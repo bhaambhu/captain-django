@@ -144,6 +144,7 @@ class SubjectList(generics.ListCreateAPIView):
     #     r.save()
     #     queryset = Subject.objects.get(id=1).get_children()
     queryset = Subject.objects.get(id=1).get_children()
+    
     # queryset = querysetSingle | querysetSingle[0].get_children()
     # queryset = Subject.objects.filter(Q(level=0) | Q(parent__level = 0))
     serializer_class = SubjectSerializer
