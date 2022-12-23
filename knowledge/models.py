@@ -6,81 +6,107 @@ from slugger import AutoSlugField
 import calendar
 
 # A subject is a collection of topics
+
+
 class Subject(MPTTModel):
-        class Meta:
-                unique_together = (('name', 'parent', ), )
-        class MPTTMeta:
-                order_insertion_by = ['name']
-        name = models.CharField(max_length=200)
-        parent = TreeForeignKey('self', on_delete=models.SET_NULL, related_name='children', null=True, blank=True)
-        display_name = models.CharField(max_length=250, blank=True, null=True)
-        about = models.CharField(max_length=500, blank=True)
-        def __str__(self):
-            return self.name
-        def breadcrumbs(self):
-            ex = []
-            for sub in self.get_ancestors(include_self=True):
-                ex.append({ "id" : sub.id, "name": sub.name})
-            return ex
-        def delete(self, *args, **kwargs):
-            # Move all its children to parent
-            for child in self.get_children():
-                child.move_to(self.parent, position="last-child")
-                child.save()
-            # Move all its topics to parent subject
-            for topic in self.topics.all():
+    class Meta:
+        unique_together = (('name', 'parent', ), )
+
+    class MPTTMeta:
+        order_insertion_by = ['name']
+    name = models.CharField(max_length=200)
+    parent = TreeForeignKey('self', on_delete=models.SET_NULL,
+                            related_name='children', null=True, blank=True)
+    display_name = models.CharField(max_length=250, blank=True, null=True)
+    about = models.CharField(max_length=500, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    def breadcrumbs(self):
+        ex = []
+        for sub in self.get_ancestors(include_self=True):
+            ex.append({"id": sub.id, "name": sub.name})
+        return ex
+
+    def delete(self, *args, **kwargs):
+        # Move all its children to parent
+        for child in self.get_children():
+            child.move_to(self.parent, position="last-child")
+            child.save()
+        # Move all its topics to parent subject
+        for topic in self.topics.all():
+            if self.parent.id == 1:
+                topic.subject = None
+            else:
                 topic.subject = self.parent
-                topic.save()
-            return super().delete(*args, **kwargs)
-       
+            topic.save()
+        return super().delete(*args, **kwargs)
+
 
 class Topic(models.Model):
     slug = AutoSlugField(populate_from='title')
     title = models.CharField(max_length=250, blank=True, null=True)
     about = models.CharField(max_length=500, blank=True)
-    subject = TreeForeignKey(Subject, on_delete=models.SET_NULL, related_name="topics", blank=True, null=True)
-    requires = models.ManyToManyField('self', symmetrical=False, related_name="required_for", blank=True)
+    subject = TreeForeignKey(
+        Subject, on_delete=models.SET_NULL, related_name="topics", blank=True, null=True)
+    requires = models.ManyToManyField(
+        'self', symmetrical=False, related_name="required_for", blank=True)
     steps = models.JSONField(default=list, blank=True)
     assessor = models.JSONField(default=dict, blank=True)
+
     def __str__(self):
         return self.title
+
     def breadcrumbs(self):
         ex = []
-        for sub in self.subject.get_ancestors(include_self=True):
-            ex.append({ "id" : sub.id, "name": sub.name})
+        if self.subject != None:
+            for sub in self.subject.get_ancestors(include_self=True):
+                ex.append({"id": sub.id, "name": sub.name})
         return ex
+
 
 class Path(models.Model):
     class PublishedPaths(models.Manager):
         def get_queryset(self):
-            return super().get_queryset().filter(status='published')
-    options = (
-        ('published', 'Published'),
-        ('draft', 'Draft'),
-    )
+            return super().get_queryset().filter(published=True)
+    # options = (
+    #     ('published', 'Published'),
+    #     ('draft', 'Draft'),
+    # )
     slug = AutoSlugField(populate_from='title')
     title = models.CharField(max_length=250, blank=True, null=True)
     about = models.CharField(max_length=500, blank=True, null=True)
-    topics = models.ManyToManyField(Topic, through='PathTopicSequence', related_name="paths")
-    status = models.CharField(
-        max_length=10, choices=options, default='draft')
+    topics = models.ManyToManyField(
+        Topic, through='PathTopicSequence', related_name="paths")
+    published = models.BooleanField(default=False)
+    # status = models.CharField(
+    #     max_length=10, choices=options, default='draft')
 
     objects = models.Manager()  # default manager
     publishedPaths = PublishedPaths()  # custom manager
+
     def __str__(self):
         return self.title
 
+
 class PathTopicSequence(models.Model):
     order = models.PositiveIntegerField()
-    path = models.ForeignKey(Path, on_delete= models.CASCADE, related_name="topic_sequence")
-    topic = models.ForeignKey(Topic, on_delete= models.CASCADE, related_name="in_paths")
+    path = models.ForeignKey(
+        Path, on_delete=models.CASCADE, related_name="topic_sequence")
+    topic = models.ForeignKey(
+        Topic, on_delete=models.CASCADE, related_name="in_paths")
+
     class Meta:
         unique_together = ['path', 'order']
         ordering = ['order']
+
     def __str__(self):
-        return self.path.title + " - "+ str(self.order) + ": "+self.topic.title
+        return self.path.title + " - " + str(self.order) + ": "+self.topic.title
 
 # Stores the various top-level information about an exam
+
+
 class ExamDescription(models.Model):
     name = models.CharField(max_length=200, blank=True)
     shortform = models.CharField(max_length=50, blank=True)
@@ -91,6 +117,8 @@ class ExamDescription(models.Model):
         return self.name+" "+self.job_title
 
 # To store individual exams (papers), it pulls exam description from model "ExamDescription"
+
+
 class Exam(models.Model):
     subject = models.CharField(max_length=200, blank=True)
     year = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -103,16 +131,20 @@ class Exam(models.Model):
     def __str__(self):
         return self.description.name+" "+self.description.shortform + " " + str(self.year) + " " + (calendar.month_abbr[self.month] if self.month else "") + ((" Paper-" + str(self.sub_paper) if self.sub_paper else ""))
 
+
 class TopicProgress(models.Model):
     verifiable = models.BooleanField(default=False)
     completed = models.BooleanField(default=False)
     student = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='topics_progress')
-    topic = models.ForeignKey(Topic, on_delete= models.CASCADE, related_name="progress")
+    topic = models.ForeignKey(
+        Topic, on_delete=models.CASCADE, related_name="progress")
+
     class Meta:
         unique_together = ['student', 'topic']
+
     def __str__(self):
-        return self.student.display_name + " - "+ self.topic.title
+        return self.student.display_name + " - " + self.topic.title
 
 # This model has the actual hierarchy of topics that we use in our system
 # class Topic(models.Model):
@@ -144,6 +176,7 @@ class TopicProgress(models.Model):
 
 #     def __str__(self):
 #         return self.slug
+
 
 class Concept(models.Model):
     name = models.CharField(max_length=200)

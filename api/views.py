@@ -8,12 +8,13 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from knowledge.models import Subject, Topic, Path, TopicProgress
 from .serializers import PathDetailRetrieveSerializer, PathDetailSerializer, PathListSerializer, PathTopicSequenceSerializer, SubjectDetailSerializer, SubjectSerializer, TopicListSerializer, TopicDetailSerializer, TopicProgressMinSerializer, TopicProgressSerializer
-from rest_framework.permissions import  BasePermission, DjangoModelPermissions, DjangoModelPermissionsOrAnonReadOnly, IsAuthenticated, SAFE_METHODS
+from rest_framework.permissions import BasePermission, DjangoModelPermissions, DjangoModelPermissionsOrAnonReadOnly, IsAuthenticated, SAFE_METHODS
 from time import sleep
 from django.views.decorators.csrf import csrf_exempt
 
+
 @csrf_exempt
-def Progresses (request):
+def Progresses(request):
     """
     List path detail in which topics' progresses are included
     """
@@ -23,6 +24,247 @@ def Progresses (request):
         serializer = TopicProgressSerializer(progresses, many=True)
         return JsonResponse(serializer.data, safe=False)
 
+@api_view(['GET', 'POST'])
+def subjects(request):
+    # To get list of subjects (who are children of root)
+    if request.method == 'GET':
+        try:
+            queryset = Subject.objects.get(id=1).get_children()
+        except:
+            r = Subject(id=1, name='root')
+            r.save()
+            queryset = Subject.objects.get(id=1).get_children()
+        serializer = SubjectSerializer(queryset, many=True)
+        return Response(serializer.data)
+    # To create a subject with provided name and parentId
+    elif request.method == 'POST':
+        serializer = SubjectSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def subjectChildren(request, pk):
+    if request.method == 'GET':
+        try:
+            queryset = Subject.objects.get(id=pk).get_children()
+        except Subject.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SubjectSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+@api_view(['GET', 'PATCH', 'PUT', 'DELETE'])
+def subject(request, pk):
+
+    try:
+        thisSubject = Subject.objects.get(id=pk)
+    except Subject.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    # To get detail of a particular subject
+    if request.method == 'GET':
+        serializer = SubjectDetailSerializer(thisSubject)
+        return Response(serializer.data)
+
+    # To update detail of a particular subject
+    elif request.method == 'PUT':
+        serializer = SubjectDetailSerializer(thisSubject, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # To reparent a subject (update the parent only)
+    elif request.method == 'PATCH':
+        target = Subject.objects.get(id=request.data['targetId'])
+        new_pos = request.data['position']
+        # Execute move operation
+        thisSubject.move_to(target, position=new_pos)
+        return Response(status=200)
+
+    # To delete the subject
+    elif request.method == 'DELETE':
+        thisSubject.delete()
+        Subject.objects.rebuild()
+        return Response(status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+def topics(request):
+    # To get list of subjects (who are children of root)
+    if request.method == 'GET':
+        queryset = Topic.objects.all()
+        serializer = TopicListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    # To create a subject with provided name and parentId
+    elif request.method == 'POST':
+        serializer = TopicListSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def orphanTopics(request):
+    # To get list of subjects (who are children of root)
+    if request.method == 'GET':
+        queryset = Topic.objects.filter(subject=None)
+        serializer = TopicListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+@api_view(['GET', 'PATCH', 'PUT', 'DELETE'])
+def topic(request, pk):
+
+    try:
+        thisTopic = Topic.objects.get(id=pk)
+    except Topic.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    # To get detail of a particular topic
+    if request.method == 'GET':
+        serializer = TopicDetailSerializer(thisTopic)
+        return Response(serializer.data)
+
+    # To update detail of a particular subject
+    elif request.method == 'PUT':
+        # Clear the requirements because we will fill them again, can this result in lost update if rest requirements make cycle?
+        thisTopic.requires.clear()
+        # Do a loop to save the "requires" dependencies, if they don't result in cycles
+        for oneRequirement in request.data['requires']:
+            try:
+                requiredTopic = Topic.objects.get(id=oneRequirement['id'])
+                # If adding this dependency doesn't create a cycle, add this, otherwise return bad_request
+                if WillMakeCycle(pk, oneRequirement['id']):
+                    return Response(data="Adding "+oneRequirement['title']+" as a requirement will result in a requirement loop, which is not allowed.", status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Add this reference successfully
+                    thisTopic.requires.add(requiredTopic)
+
+            except Topic.DoesNotExist:
+                return Response(data="One or more of the added required topics do not exist on the server.", status=status.HTTP_400_BAD_REQUEST)
+
+        # This will save rest of the properties of the topic
+        serializer = TopicDetailSerializer(
+            thisTopic, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # To reparent a topic (update the subject only)
+    elif request.method == 'PATCH':
+        subject = Subject.objects.get(id=request.data['subjectId'])
+        thisTopic.subject = subject
+        thisTopic.save()
+        selectedSubject = Subject.objects.get(
+            id=request.data['selectedSubjectId'])
+        serializer = SubjectDetailSerializer(selectedSubject)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # To delete the subject
+    elif request.method == 'DELETE':
+        thisTopic.delete()
+        return Response(status=status.HTTP_200_OK)
+
+
+@api_view(['POST', 'PATCH', 'DELETE'])
+def topicRequirement(request, pk, rTopicId):
+
+    try:
+        thisTopic = Topic.objects.get(id=pk)
+    except Topic.DoesNotExist:
+        return Response(data="The current topic does not exist on the server.", status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        requiredTopic = Topic.objects.get(id=rTopicId)
+    except Topic.DoesNotExist:
+        return Response(data="The required topic does not exist on the server.", status=status.HTTP_404_NOT_FOUND)
+
+    # To check if adding this requirement will be safe
+    if request.method == 'POST':
+        # If adding this dependency will create a cycle send bad_request, otherwise return OK
+        if WillMakeCycle(pk, rTopicId):
+            return Response(data="Adding '"+requiredTopic.title + "' as a requirement for '" + thisTopic.title + "' will result in a requirement loop, which is not allowed.", status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Add this reference successfully
+            return Response(data="It's safe to add this dependency.", status=status.HTTP_200_OK)
+
+    # To add the requirement to this topic
+    elif request.method == 'PATCH':
+        # If adding this dependency doesn't create a cycle, add this, otherwise return bad_request
+        if WillMakeCycle(pk, rTopicId):
+            return Response(data="Adding '"+requiredTopic.title + "' as a requirement for '" + thisTopic.title + "' will result in a requirement loop, which is not allowed.", status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Add this reference successfully
+            thisTopic.requires.add(requiredTopic)
+            thisTopic.save()
+            return Response(TopicProgressMinSerializer(thisTopic.requires.all(), many=True).data, status=status.HTTP_200_OK)
+
+    # To remove this topic from requirements
+    elif request.method == 'DELETE':
+        thisTopic.requires.remove(rTopicId)
+        thisTopic.save()
+        return Response(TopicProgressMinSerializer(thisTopic.requires.all(), many=True).data, status=status.HTTP_200_OK)
+
+@api_view(['GET', 'POST'])
+def paths(request):
+    # To get list of paths
+    if request.method == 'GET':
+        queryset = Path.objects.all().order_by('pk')
+        serializer = PathListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    # To create a path with provided title, about and published(bool)
+    elif request.method == 'POST':
+        serializer = PathListSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET', 'PUT', 'DELETE'])
+def pathDetail(request, pk):
+
+    try:
+        thisPath = Path.objects.get(id=pk)
+    except Path.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    # To get detail of a particular path
+    if request.method == 'GET':
+        queryset = Path.objects.prefetch_related(Prefetch('topic_sequence__topic__progress', queryset=TopicProgress.objects.filter(
+            student=request.user.id), to_attr='filtered_progress')).get(id=pk)
+        print("Request by "+str(request.user))
+        print("Requesting user's id is "+str(request.user.id))
+        serializer = PathDetailRetrieveSerializer(queryset)
+        return Response(serializer.data)
+
+    # To update detail of a particular path
+    elif request.method == 'PUT':
+        serializer = PathDetailSerializer(thisPath, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # To delete the subject
+    elif request.method == 'DELETE':
+        thisPath.delete()
+        return Response(status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def publishedPaths(request):
+    # To get list of paths
+    if request.method == 'GET':
+        queryset = Path.publishedPaths.all()
+        serializer = PathListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
 # Check rest_framework docs for other generic classbasedviews, there might be some that are more appropriate
 
 # Generic Views
@@ -30,6 +272,7 @@ class ProgressList(generics.ListCreateAPIView):
     permission_classes = []
     queryset = TopicProgress.objects.all()
     serializer_class = TopicProgressSerializer
+
     def list(self, request):
         print(request.user)
         # Note the use of `get_queryset()` instead of `self.queryset`
@@ -47,200 +290,15 @@ def WillMakeCycle(current_topic_id, referenced_topic_id):
                 return True
         return False
 
-
-# Why do we have this separate request method instead of adding dependencies via the "save topic" way? Because it allows us to check cycle correctly, for every dependency as we add them one-by-one. The other option was to allow user to add/remove dependencies offline (and only check if adding a dependency will create cycle) and update them on the server via the common "save topic" request. This has a big problem, as checking cycle for an individual dependency through server will give us that there's no cycle, but once multiple "no cycle" dependencies have been added offline by the user and they "save online", there's a chance that they together might lead to a cycle, which will lead to bad user-experience for the subject expert, as the whole "save-topic" request will be rejected.
-@api_view(['PATCH'])
-def AddTopicDependency(request):
-    try:
-        currentTopic = Topic.objects.get(id=request.data['ctopic_id'])
-        requiredTopic = Topic.objects.get(id=request.data['rtopic_id'])
-    except Topic.DoesNotExist:
-        return Response(data="Topic does not exist on the server.", status=status.HTTP_400_BAD_REQUEST)
-    
-    # If adding this dependency doesn't create a cycle, add this, otherwise return bad_request
-    if WillMakeCycle(request.data['ctopic_id'], request.data['rtopic_id']):
-        return Response(data="Adding this topic makes a requirement loop.", status=status.HTTP_400_BAD_REQUEST)
-    else:
-        # Add this reference successfully
-        currentTopic.requires.add(requiredTopic)
-        currentTopic.save()
-        return Response(TopicProgressMinSerializer(currentTopic.requires.all(), many=True).data, status=status.HTTP_200_OK)
-
-@api_view(['PATCH'])
-def DeleteTopicDependency(request):
-    try:
-        currentTopic = Topic.objects.get(id=request.data['ctopic_id'])
-    except Topic.DoesNotExist:
-        return Response(data="Topic does not exist on the server.", status=status.HTTP_400_BAD_REQUEST)
-    
-    currentTopic.requires.remove(request.data['rtopic_id'])
-    currentTopic.save()
-    return Response(TopicProgressMinSerializer(currentTopic.requires.all(), many=True).data, status=status.HTTP_200_OK)
-
-@api_view(['PATCH'])
-def isDependencySafe(request):
-    try:
-        requiredTopic = Topic.objects.get(id=request.data['rtopic_id'])
-    except Topic.DoesNotExist:
-        return Response(data="Topic does not exist on the server.", status=status.HTTP_400_BAD_REQUEST)
-    
-    # If adding this dependency will create a cycle send bad_request, otherwise return OK
-    if WillMakeCycle(request.data['ctopic_id'], request.data['rtopic_id']):
-        return Response(data="Adding "+requiredTopic.title+" as a requirement will result in a requirement loop, which is not allowed.", status=status.HTTP_400_BAD_REQUEST)
-    else:
-        # Add this reference successfully
-        return Response(data="It's safe to add this dependency.", status=status.HTTP_200_OK)
-
-@api_view(['PATCH'])
-def DeleteSubject(request):
-    subject = Subject.objects.get(id=request.data['id'])
-    subject.delete()
-    Subject.objects.rebuild()
-    return Response(status=200)
-
-@api_view(['PATCH'])
-def ReparentTopic(request):
-    topic = Topic.objects.get(id=request.data['topic_id'])
-    subject = Subject.objects.get(id=request.data['subject_id'])
-    topic.subject = subject
-    topic.save()
-    source_subject = Subject.objects.get(id=request.data['source_subject_id'])
-    # Execute move operation
-    return Response(SubjectDetailSerializer(source_subject).data, status=status.HTTP_200_OK)
-
-@api_view(['PATCH'])
-def MoveNode(request):
-    source = Subject.objects.get(id=request.data['sourceid'])
-    target = Subject.objects.get(id=request.data['targetid'])
-    new_pos = request.data['position']
-    # Execute move operation
-    source.move_to(target, position=new_pos)
-    return Response(status=200)
-
-@api_view(['PATCH'])
-def DeleteSubject(request):
-    subject = Subject.objects.get(id=request.data['id'])
-    subject.delete()
-    Subject.objects.rebuild()
-    return Response(status=200)
-
-class Children(generics.ListCreateAPIView):
-    permission_classes = []
-    queryset = Subject.objects.all()
-    serializer_class = SubjectSerializer
-    def list(self, request, *args, **kwargs):
-        queryset = Subject.objects.get(id=kwargs['pk']).get_children()
-        print("Request by "+str(self.request.user))
-        serializer = SubjectSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-class SubjectList(generics.ListCreateAPIView):
-    permission_classes = []
-    # querysetSingle = Subject.objects.filter(id=1)
-    try:
-        queryset = Subject.objects.get(id=1).get_children()
-    except:
-        r = Subject(id=1, name='root')
-        r.save()
-        queryset = Subject.objects.get(id=1).get_children()
-    # queryset = Subject.objects.get(id=1).get_children()
-    # queryset = Subject.objects.all()
-
-    # queryset = querysetSingle | querysetSingle[0].get_children()
-    # queryset = Subject.objects.filter(Q(level=0) | Q(parent__level = 0))
-    serializer_class = SubjectSerializer
-    def create(self, request, *args, **kwargs):
-        parentObject = Subject.objects.get(id=request.data['parentId'])
-        newObject = Subject.objects.create(name=request.data['name'], parent=parentObject)
-        return Response(SubjectSerializer(newObject).data, status=status.HTTP_201_CREATED)
-
-class PathList(generics.ListCreateAPIView):
-    permission_classes = []
-    queryset = Path.objects.all().order_by('pk')
-    serializer_class = PathListSerializer
-
-class PublishedPathList(generics.ListAPIView):
-    permission_classes = []
-    queryset = Path.publishedPaths.all()
-    serializer_class = PathListSerializer
-    
-class SubjectDetail(generics.RetrieveUpdateAPIView):
-    permission_classes = []
-    queryset = Subject.objects.all()
-    serializer_class = SubjectDetailSerializer
-    # def retrieve(self, request, *args, **kwargs):
-    #     # queryset = Path.objects.get(id=kwargs['pk'])
-    #     queryset = Path.objects.prefetch_related(Prefetch('topic_sequence__topic__progress', queryset=TopicProgress.objects.filter(student=self.request.user.id), to_attr='filtered_progress')).get(id=kwargs['pk'])
-    #     print("Request by "+str(self.request.user))
-    #     serializer = PathDetailRetrieveSerializer(queryset)
-    #     return Response(serializer.data)
-
-class PathDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = []
-    queryset = Path.objects.all()
-    serializer_class = PathDetailSerializer
-    def retrieve(self, request, *args, **kwargs):
-        # queryset = Path.objects.get(id=kwargs['pk'])
-        queryset = Path.objects.prefetch_related(Prefetch('topic_sequence__topic__progress', queryset=TopicProgress.objects.filter(student=self.request.user.id), to_attr='filtered_progress')).get(id=kwargs['pk'])
-        print("Request by "+str(self.request.user))
-        serializer = PathDetailRetrieveSerializer(queryset)
-        return Response(serializer.data)
-    
-class TopicList(generics.ListCreateAPIView):
-    permission_classes = []
-    queryset = Topic.objects.all()
-    serializer_class = TopicListSerializer
-    def create(self, request, *args, **kwargs):
-        parentObject = Subject.objects.get(id=request.data['parentId'])
-        newObject = Topic.objects.create(title=request.data['name'], subject=parentObject)
-        return Response(TopicListSerializer(newObject).data, status=status.HTTP_201_CREATED)
-
-# Dangerous as it can be accessed by anyone
 class DataInfo(APIView):
     permission_classes = []
+
     def get(self, request, format=None):
         with connection.cursor() as cursor:
-            cursor.execute("SELECT relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC")
+            cursor.execute(
+                "SELECT relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC")
             all = cursor.fetchall()
         return Response(all)
-
-class DanglingTopicsList(generics.ListCreateAPIView):
-    permission_classes = []
-    queryset = Topic.objects.filter(subject=None)
-    serializer_class = TopicListSerializer
-
-class TopicDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = []
-    queryset = Topic.objects.all()
-    serializer_class = TopicDetailSerializer
-    def update(self, request, *args, **kwargs):
-        # Get the current topic object
-        currentTopic = Topic.objects.get(id=request.data['id'])
-        currentTopic.requires.clear()
-        # Do a loop to save the "requires" dependencies, if they don't result in cycles
-        for oneRequirement in request.data['requires']:
-            try:
-                requiredTopic = Topic.objects.get(id=oneRequirement['id'])
-                # If adding this dependency doesn't create a cycle, add this, otherwise return bad_request
-                if WillMakeCycle(request.data['id'], oneRequirement['id']):
-                    return Response(data="Adding "+oneRequirement['title']+" as a requirement will result in a requirement loop, which is not allowed.", status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    # Add this reference successfully
-                    currentTopic.requires.add(requiredTopic)
-
-            except Topic.DoesNotExist:
-                return Response(data="Topic does not exist on the server.", status=status.HTTP_400_BAD_REQUEST)
-            
-        # This will save rest of the properties of the topic
-        return super().update(request, *args, **kwargs)
-    # def update(self, request, *args, **kwargs):
-    #     print(request.data)
-    #     return Response(data='Theek h', status=status.HTTP_200_OK)
-
-# class TopicList(generics.ListCreateAPIView):
-#     permission_classes = [DjangoModelPermissionsOrAnonReadOnly]
-#     queryset = Topic.topicobjects.all()
-#     serializer_class = TopicSerializer
 
 # Custom Permissions
 # class TopicUserWritePermission(BasePermission):

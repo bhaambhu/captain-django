@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AddTopicDependency, Children, DanglingTopicsList, DataInfo, DeleteSubject, DeleteTopicDependency, MoveNode, PathDetail, PathList, ProgressList, Progresses, PublishedPathList, ReparentTopic, SubjectDetail, SubjectList, TopicList, TopicDetail, isDependencySafe
+from .views import DataInfo, ProgressList, Progresses, subjects, subject, topics, topic, topicRequirement, orphanTopics, subjectChildren, paths, pathDetail, publishedPaths
 from rest_framework_swagger.views import get_swagger_view
 
 
@@ -9,25 +9,45 @@ app_name = 'api'
 
 urlpatterns = [
     path('', schema_view),
-    path('topics/<int:pk>/', TopicDetail.as_view(), name='topicDetail'),
-    path('topics/', TopicList.as_view(), name='topicList'),
-    path('danglingtopics/', DanglingTopicsList.as_view(), name='danglingTopics'),
-    path('adddependency/', AddTopicDependency, name='addDependency'),
-    path('removedependency/', DeleteTopicDependency, name='removeDependency'),
-    path('dependencysafe/', isDependencySafe, name='isDependencySafe'),
+
+    # GET: Get all root level subjects
+    # POST: create subject
+    path('subjects/', subjects, name='subjectsList'),
+
+    # GET: Get subject in detail
+    # PUT: Update subject in detail
+    # PATCH: Change subject's parent subject (reparent subject)
+    # DELETE: Delete subject
+    path('subjects/<int:pk>/', subject, name='subjectDetail'),
+
+    # Get children of particular subject
+    path('subjects/<int:pk>/children/',
+         subjectChildren, name='subjectChildren'),
+
+    # GET: Get all topics
+    # POST: Create topic
+    path('topics/', topics, name='topics'),
+
+    # GET: Get topic in detail
+    # PUT: Update topic in detail
+    # PATCH: Change topic's subject
+    # DELETE: Delete topic
+    path('topics/<int:pk>/', topic, name='topicDetail'),
+
+    # POST: Check if safe to add requirement
+    # PATCH: Add requirement
+    # DELETE: Delete requirement
+    path('topics/<int:pk>/requires/<int:rTopicId>/', topicRequirement, name='topicRequirement'),
+
+    # GET: Get those topics which don't have any subject assigned to them
+    path('topics/orphans/', orphanTopics, name='orphanTopics'),
 
     path('datainfo/', DataInfo.as_view(), name='dataInfo'),
 
-    path('paths/', PathList.as_view(), name='pathList'),
-    path('pubpaths/', PublishedPathList.as_view(), name='pubPathList'),
-    path('paths/<int:pk>/', PathDetail.as_view(), name='pathDetail'),
+    path('paths/', paths, name='paths'),
+    path('paths/<int:pk>/', pathDetail, name='pathDetail'),
+    path('paths/published/', publishedPaths, name='publishedPathsList'),
 
-    path('subjects/', SubjectList.as_view(), name='subjectList'),
-    path('subjects/<int:pk>/', Children.as_view(), name='subjects'),
-    path('subjectdetail/<int:pk>/', SubjectDetail.as_view(), name='subjectDetail'),
-    path('movesubject/', MoveNode, name='moveNode'),
-    path('deletesubject/', DeleteSubject, name='deleteSubject'),
-    path('reparenttopic/', ReparentTopic, name='reparentTopic'),
     # path('progresses/', ProgressList.as_view(), name='progresses'),
     path('progresses/', Progresses, name='progresses'),
 ]

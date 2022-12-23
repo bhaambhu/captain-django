@@ -14,7 +14,7 @@ class ChildrenSerializer(serializers.ModelSerializer):
 class TopicListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'requires', 'breadcrumbs')
+        fields = ('id', 'title', 'about', 'subject', 'requires', 'breadcrumbs')
 
 class BreadcrumbSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,7 +28,8 @@ class SubjectSerializer(serializers.ModelSerializer):
     # breadcrumbs = BreadcrumbSerializer(many=True, source='get_ancestors(include_self=True)')
     class Meta:
         model = Subject
-        fields = ('id', 'children', 'hasChildren', 'isExpanded', 'isChildrenLoading', 'name', 'display_name', 'breadcrumbs')
+        fields = ('id', 'children', 'hasChildren', 'isExpanded', 'isChildrenLoading', 'name', 'display_name', 'breadcrumbs', 'parent')
+        extra_kwargs = {'children': {'required':False}}
         # depth = 1
 
 class SubjectDetailSerializer(serializers.ModelSerializer):
@@ -90,7 +91,7 @@ class PathDetailRetrieveSerializer(serializers.ModelSerializer):
     topic_sequence = PathTopicSequenceProgressSerializer(many=True)
     class Meta:
         model = Path
-        fields = ('id', 'status', 'title', 'about', 'topic_sequence')
+        fields = ('id', 'published', 'title', 'about', 'topic_sequence')
 
 class PathTopicSequenceSerializer(serializers.ModelSerializer):
     topic = TopicListSerializer()
@@ -102,13 +103,13 @@ class PathDetailSerializer(serializers.ModelSerializer):
     topic_sequence = PathTopicSequenceSerializer(many=True)
     class Meta:
         model = Path
-        fields = ('id', 'status', 'title', 'about', 'topic_sequence')
+        fields = ('id', 'published', 'title', 'about', 'topic_sequence')
     def update(self, instance, validated_data):
         
         # first save the Path meta info
         instance.title = validated_data.get('title', instance.title)
         instance.about = validated_data.get('about', instance.about)
-        instance.status = validated_data.get('status', instance.status)
+        instance.published = validated_data.get('published', instance.published)
         # First delete existing topic_sequence data for this path
         instance.topic_sequence.all().delete()
         instance.save()
@@ -127,7 +128,7 @@ class PathDetailSerializer(serializers.ModelSerializer):
 class PathListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Path
-        fields = ('id', 'title', 'about', 'status')
+        fields = ('id', 'title', 'about', 'published')
 
 # class TopicSerializer(serializers.ModelSerializer):
 #     class Meta:
