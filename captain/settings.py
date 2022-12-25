@@ -166,7 +166,7 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", "http://localhost:19006"
+    "http://localhost:3000", "http://localhost:19006", "https://captain-nextjs-3hs8su7d3-bhaambhu.vercel.app"
 ]
 
 # Custom user model
