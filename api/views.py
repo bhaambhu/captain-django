@@ -8,9 +8,28 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from knowledge.models import Subject, Topic, Path, TopicProgress
 from .serializers import PathDetailRetrieveSerializer, PathDetailSerializer, PathListSerializer, PathTopicSequenceSerializer, SubjectDetailSerializer, SubjectSerializer, TopicListSerializer, TopicDetailSerializer, TopicProgressMinSerializer, TopicProgressSerializer
-from rest_framework.permissions import BasePermission, DjangoModelPermissions, DjangoModelPermissionsOrAnonReadOnly, IsAuthenticated, SAFE_METHODS
+from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly, SAFE_METHODS
 from time import sleep
 from django.views.decorators.csrf import csrf_exempt
+
+
+# Custom Permissions
+class IsSuperUser(BasePermission):
+    message = "Allowed for superuser only"
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_superuser)
+
+# class TopicUserWritePermission(BasePermission):
+#     message = 'Editing topics is restricted to the author only.'
+#     def has_object_permission(self, request, view, obj):
+#         if (request.method in SAFE_METHODS) or request.user.is_superuser:
+#             return True
+#         return obj.author == request.user
+
+# class TopicDetail(generics.RetrieveUpdateAPIView, TopicUserWritePermission):
+#     permission_classes = [DjangoModelPermissions, TopicUserWritePermission]
+#     queryset = Topic.objects.all()
+#     serializer_class = TopicDetailSerializer
 
 
 @csrf_exempt
@@ -23,6 +42,7 @@ def Progresses(request):
         progresses = TopicProgress.objects.filter(student=request.user.id)
         serializer = TopicProgressSerializer(progresses, many=True)
         return JsonResponse(serializer.data, safe=False)
+
 
 @api_view(['GET', 'POST'])
 def subjects(request):
@@ -44,6 +64,7 @@ def subjects(request):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 @api_view(['GET'])
 def subjectChildren(request, pk):
     if request.method == 'GET':
@@ -54,6 +75,7 @@ def subjectChildren(request, pk):
 
         serializer = SubjectSerializer(queryset, many=True)
         return Response(serializer.data)
+
 
 @api_view(['GET', 'PATCH', 'PUT', 'DELETE'])
 def subject(request, pk):
@@ -82,7 +104,7 @@ def subject(request, pk):
         new_pos = request.data['position']
         # Execute move operation
         thisSubject.move_to(target, position=new_pos)
-        return Response(status=200)
+        return Response(status=status.HTTP_200_OK)
 
     # To delete the subject
     elif request.method == 'DELETE':
@@ -106,6 +128,7 @@ def topics(request):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET'])
 def orphanTopics(request):
@@ -210,6 +233,7 @@ def topicRequirement(request, pk, rTopicId):
         thisTopic.save()
         return Response(TopicProgressMinSerializer(thisTopic.requires.all(), many=True).data, status=status.HTTP_200_OK)
 
+
 @api_view(['GET', 'POST'])
 def paths(request):
     # To get list of paths
@@ -225,6 +249,7 @@ def paths(request):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET', 'PUT', 'DELETE'])
 def pathDetail(request, pk):
@@ -256,6 +281,7 @@ def pathDetail(request, pk):
         thisPath.delete()
         return Response(status=status.HTTP_200_OK)
 
+
 @api_view(['GET'])
 def publishedPaths(request):
     # To get list of paths
@@ -280,6 +306,7 @@ class ProgressList(generics.ListCreateAPIView):
         serializer = TopicProgressSerializer(queryset, many=True)
         return Response(serializer.data)
 
+
 def WillMakeCycle(current_topic_id, referenced_topic_id):
     if current_topic_id == referenced_topic_id:
         return True
@@ -290,8 +317,9 @@ def WillMakeCycle(current_topic_id, referenced_topic_id):
                 return True
         return False
 
+
 class DataInfo(APIView):
-    permission_classes = []
+    permission_classes = [IsAdminUser]
 
     def get(self, request, format=None):
         with connection.cursor() as cursor:
@@ -299,16 +327,3 @@ class DataInfo(APIView):
                 "SELECT relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC")
             all = cursor.fetchall()
         return Response(all)
-
-# Custom Permissions
-# class TopicUserWritePermission(BasePermission):
-#     message = 'Editing topics is restricted to the author only.'
-#     def has_object_permission(self, request, view, obj):
-#         if (request.method in SAFE_METHODS) or request.user.is_superuser:
-#             return True
-#         return obj.author == request.user
-
-# class TopicDetail(generics.RetrieveUpdateAPIView, TopicUserWritePermission):
-#     permission_classes = [DjangoModelPermissions, TopicUserWritePermission]
-#     queryset = Topic.objects.all()
-#     serializer_class = TopicDetailSerializer
