@@ -1,10 +1,11 @@
 from django.db.models.query import Prefetch
 from django.db.models.query_utils import Q
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from django.http.response import JsonResponse
 from django.db import connection
 from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from knowledge.models import Subject, Topic, Path, TopicProgress
 from .serializers import PathDetailRetrieveSerializer, PathDetailSerializer, PathListSerializer, PathTopicSequenceSerializer, SubjectDetailSerializer, SubjectSerializer, TopicListSerializer, TopicDetailSerializer, TopicProgressMinSerializer, TopicProgressSerializer
@@ -16,33 +17,9 @@ from django.views.decorators.csrf import csrf_exempt
 # Custom Permissions
 class IsSuperUser(BasePermission):
     message = "Allowed for superuser only"
+
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_superuser)
-
-# class TopicUserWritePermission(BasePermission):
-#     message = 'Editing topics is restricted to the author only.'
-#     def has_object_permission(self, request, view, obj):
-#         if (request.method in SAFE_METHODS) or request.user.is_superuser:
-#             return True
-#         return obj.author == request.user
-
-# class TopicDetail(generics.RetrieveUpdateAPIView, TopicUserWritePermission):
-#     permission_classes = [DjangoModelPermissions, TopicUserWritePermission]
-#     queryset = Topic.objects.all()
-#     serializer_class = TopicDetailSerializer
-
-
-@csrf_exempt
-def Progresses(request):
-    """
-    List path detail in which topics' progresses are included
-    """
-    if request.method == 'GET':
-        print("Requesting user is "+str(request.user))
-        progresses = TopicProgress.objects.filter(student=request.user.id)
-        serializer = TopicProgressSerializer(progresses, many=True)
-        return JsonResponse(serializer.data, safe=False)
-
 
 @api_view(['GET', 'POST'])
 def subjects(request):
@@ -56,8 +33,13 @@ def subjects(request):
             queryset = Subject.objects.get(id=1).get_children()
         serializer = SubjectSerializer(queryset, many=True)
         return Response(serializer.data)
+
     # To create a subject with provided name and parentId
     elif request.method == 'POST':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         serializer = SubjectSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -92,6 +74,10 @@ def subject(request, pk):
 
     # To update detail of a particular subject
     elif request.method == 'PUT':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         serializer = SubjectDetailSerializer(thisSubject, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -100,6 +86,10 @@ def subject(request, pk):
 
     # To reparent a subject (update the parent only)
     elif request.method == 'PATCH':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         target = Subject.objects.get(id=request.data['targetId'])
         new_pos = request.data['position']
         # Execute move operation
@@ -108,6 +98,10 @@ def subject(request, pk):
 
     # To delete the subject
     elif request.method == 'DELETE':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         thisSubject.delete()
         Subject.objects.rebuild()
         return Response(status=status.HTTP_200_OK)
@@ -115,14 +109,18 @@ def subject(request, pk):
 
 @api_view(['GET', 'POST'])
 def topics(request):
-    # To get list of subjects (who are children of root)
+    # To get list of all topics
     if request.method == 'GET':
         queryset = Topic.objects.all()
         serializer = TopicListSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    # To create a subject with provided name and parentId
+    # To create a topic with provided data
     elif request.method == 'POST':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         serializer = TopicListSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -132,7 +130,7 @@ def topics(request):
 
 @api_view(['GET'])
 def orphanTopics(request):
-    # To get list of subjects (who are children of root)
+    # To get list of topics who don't have any subjects
     if request.method == 'GET':
         queryset = Topic.objects.filter(subject=None)
         serializer = TopicListSerializer(queryset, many=True)
@@ -154,6 +152,10 @@ def topic(request, pk):
 
     # To update detail of a particular subject
     elif request.method == 'PUT':
+        # Only allow staff to update topics
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         # Clear the requirements because we will fill them again, can this result in lost update if rest requirements make cycle?
         thisTopic.requires.clear()
         # Do a loop to save the "requires" dependencies, if they don't result in cycles
@@ -180,6 +182,10 @@ def topic(request, pk):
 
     # To reparent a topic (update the subject only)
     elif request.method == 'PATCH':
+        # Only allow staff to reparent topics
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         subject = Subject.objects.get(id=request.data['subjectId'])
         thisTopic.subject = subject
         thisTopic.save()
@@ -188,13 +194,18 @@ def topic(request, pk):
         serializer = SubjectDetailSerializer(selectedSubject)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    # To delete the subject
+    # To delete the topic
     elif request.method == 'DELETE':
+        # Only allow staff to delete topics
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         thisTopic.delete()
         return Response(status=status.HTTP_200_OK)
 
 
 @api_view(['POST', 'PATCH', 'DELETE'])
+@permission_classes([IsAdminUser])
 def topicRequirement(request, pk, rTopicId):
 
     try:
@@ -238,12 +249,21 @@ def topicRequirement(request, pk, rTopicId):
 def paths(request):
     # To get list of paths
     if request.method == 'GET':
-        queryset = Path.objects.all().order_by('pk')
+        # If requesting user is staff, send all paths
+        if (request.user.is_staff):
+            queryset = Path.objects.all().order_by('pk')
+        else:
+            queryset = Path.publishedPaths.all().order_by('pk')
+
         serializer = PathListSerializer(queryset, many=True)
         return Response(serializer.data)
 
     # To create a path with provided title, about and published(bool)
     elif request.method == 'POST':
+        # Only allow staff to create paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         serializer = PathListSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -261,6 +281,10 @@ def pathDetail(request, pk):
 
     # To get detail of a particular path
     if request.method == 'GET':
+        # If non-staff user has requested, only send if its a published path
+        if (not thisPath.published and not request.user.is_staff):
+            raise PermissionDenied()
+            
         queryset = Path.objects.prefetch_related(Prefetch('topic_sequence__topic__progress', queryset=TopicProgress.objects.filter(
             student=request.user.id), to_attr='filtered_progress')).get(id=pk)
         print("Request by "+str(request.user))
@@ -270,6 +294,10 @@ def pathDetail(request, pk):
 
     # To update detail of a particular path
     elif request.method == 'PUT':
+        # Only allow staff to update paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         serializer = PathDetailSerializer(thisPath, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -278,6 +306,10 @@ def pathDetail(request, pk):
 
     # To delete the subject
     elif request.method == 'DELETE':
+        # Only allow staff to delete paths
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
         thisPath.delete()
         return Response(status=status.HTTP_200_OK)
 
@@ -290,22 +322,26 @@ def publishedPaths(request):
         serializer = PathListSerializer(queryset, many=True)
         return Response(serializer.data)
 
+@csrf_exempt
+def Progresses(request):
+    # List path detail in which topics' progresses are included
+    if request.method == 'GET':
+        print("Requesting user is "+str(request.user))
+        progresses = TopicProgress.objects.filter(student=request.user.id)
+        serializer = TopicProgressSerializer(progresses, many=True)
+        return JsonResponse(serializer.data, safe=False)
 
-# Check rest_framework docs for other generic classbasedviews, there might be some that are more appropriate
 
-# Generic Views
-class ProgressList(generics.ListCreateAPIView):
-    permission_classes = []
-    queryset = TopicProgress.objects.all()
-    serializer_class = TopicProgressSerializer
+class DataInfo(APIView):
+    permission_classes = [IsAdminUser]
+    def get(self, request, format=None):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC")
+            all = cursor.fetchall()
+        return Response(all)
 
-    def list(self, request):
-        print(request.user)
-        # Note the use of `get_queryset()` instead of `self.queryset`
-        queryset = self.get_queryset().filter(student=request.user.id)
-        serializer = TopicProgressSerializer(queryset, many=True)
-        return Response(serializer.data)
-
+# Helper functions (not views)
 
 def WillMakeCycle(current_topic_id, referenced_topic_id):
     if current_topic_id == referenced_topic_id:
@@ -317,13 +353,27 @@ def WillMakeCycle(current_topic_id, referenced_topic_id):
                 return True
         return False
 
+# Old Code
+# class ProgressList(generics.ListCreateAPIView):
+#     permission_classes = []
+#     queryset = TopicProgress.objects.all()
+#     serializer_class = TopicProgressSerializer
 
-class DataInfo(APIView):
-    permission_classes = [IsAdminUser]
+#     def list(self, request):
+#         print(request.user)
+#         # Note the use of `get_queryset()` instead of `self.queryset`
+#         queryset = self.get_queryset().filter(student=request.user.id)
+#         serializer = TopicProgressSerializer(queryset, many=True)
+#         return Response(serializer.data)
 
-    def get(self, request, format=None):
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC")
-            all = cursor.fetchall()
-        return Response(all)
+# class TopicUserWritePermission(BasePermission):
+#     message = 'Editing topics is restricted to the author only.'
+#     def has_object_permission(self, request, view, obj):
+#         if (request.method in SAFE_METHODS) or request.user.is_superuser:
+#             return True
+#         return obj.author == request.user
+
+# class TopicDetail(generics.RetrieveUpdateAPIView, TopicUserWritePermission):
+#     permission_classes = [DjangoModelPermissions, TopicUserWritePermission]
+#     queryset = Topic.objects.all()
+#     serializer_class = TopicDetailSerializer

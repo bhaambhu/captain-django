@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import DataInfo, ProgressList, Progresses, subjects, subject, topics, topic, topicRequirement, orphanTopics, subjectChildren, paths, pathDetail, publishedPaths
+from .views import DataInfo, Progresses, subjects, subject, topics, topic, topicRequirement, orphanTopics, subjectChildren, paths, pathDetail, publishedPaths
 from rest_framework_swagger.views import get_swagger_view
 
 
