@@ -276,9 +276,9 @@ def paths(request):
     if request.method == 'GET':
         # If requesting user is staff, send all paths
         if (request.user.is_staff):
-            queryset = Path.objects.all().order_by('pk')
+            queryset = Path.objects.all().order_by('-published')
         else:
-            queryset = Path.publishedPaths.all().order_by('pk')
+            queryset = Path.publishedPaths.all()
 
         serializer = PathListSerializer(queryset, many=True)
         return Response(serializer.data)
