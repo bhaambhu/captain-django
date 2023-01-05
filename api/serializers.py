@@ -79,7 +79,7 @@ class TopicDetailSerializer(serializers.ModelSerializer):
     requires = TopicProgressMinSerializer(many=True, read_only=True)
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'requires', 'subject', 'breadcrumbs', 'assessor', 'steps' )
+        fields = ('id', 'title', 'about', 'author', 'requires', 'subject', 'breadcrumbs', 'assessor', 'steps' )
 
 class PathTopicSequenceProgressSerializer(serializers.ModelSerializer):
     topic = TopicListProgressSerializer()
@@ -111,7 +111,7 @@ class PathDetailSerializer(serializers.ModelSerializer):
         instance.about = validated_data.get('about', instance.about)
         instance.published = validated_data.get('published', instance.published)
         instance.author = validated_data.get('author', instance.author)
-        
+
         # First delete existing topic_sequence data for this path
         instance.topic_sequence.all().delete()
         instance.save()

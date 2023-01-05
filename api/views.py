@@ -163,7 +163,7 @@ def topic(request, pk):
         # If this topic has no author, and requester is not superuser:
         elif not request.user.is_superuser:
             raise PermissionDenied()
-        # If this topic has no auther, and requester is superuser, make him author
+        # If this topic has no author, and requester is superuser, make him author
         else:
             request.data["author"] = request.user.id
         # Old System:
