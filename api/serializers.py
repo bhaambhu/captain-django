@@ -67,7 +67,7 @@ class TopicListProgressSerializer(serializers.ModelSerializer):
     progress = TopicProgressSerializer(many=True, source='filtered_progress')
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'requires', 'breadcrumbs', 'progress')
+        fields = ('id', 'title', 'about', 'author', 'requires', 'breadcrumbs', 'progress')
 
 class TopicProgressMinSerializer(serializers.ModelSerializer):
     progress = TopicProgressSerializer(many=True)
