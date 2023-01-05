@@ -54,6 +54,8 @@ class Topic(models.Model):
         'self', symmetrical=False, related_name="required_for", blank=True)
     steps = models.JSONField(default=list, blank=True)
     assessor = models.JSONField(default=dict, blank=True)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name='topics', null=True)
 
     def __str__(self):
         return self.title
@@ -80,6 +82,8 @@ class Path(models.Model):
     topics = models.ManyToManyField(
         Topic, through='PathTopicSequence', related_name="paths")
     published = models.BooleanField(default=False)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name='paths', null=True)
     # status = models.CharField(
     #     max_length=10, choices=options, default='draft')
 

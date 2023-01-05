@@ -121,6 +121,8 @@ def topics(request):
         if not request.user.is_staff:
             raise PermissionDenied()
 
+        # Add the author field as the requesting user
+        request.data["author"] = request.user.id
         serializer = TopicListSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -150,11 +152,24 @@ def topic(request, pk):
         serializer = TopicDetailSerializer(thisTopic)
         return Response(serializer.data)
 
-    # To update detail of a particular subject
+    # To update detail of a particular topic
     elif request.method == 'PUT':
-        # Only allow staff to update topics
-        if not request.user.is_staff:
+        # Only allow topic-creator or superuser to update topic
+        # If this topic has an author:
+        if thisTopic.author:
+            # If requester is not thisTopic's author, and requester is not superuser
+            if (request.user.id != thisTopic.author.id and not request.user.is_superuser):
+                raise PermissionDenied()
+        # If this topic has no author, and requester is not superuser:
+        elif not request.user.is_superuser:
             raise PermissionDenied()
+        # If this topic has no auther, and requester is superuser, make him author
+        else:
+            request.data["author"] = request.user.id
+        # Old System:
+        # # Only allow staff to update topics
+        # if not request.user.is_staff:
+        #     raise PermissionDenied()
 
         # Clear the requirements because we will fill them again, can this result in lost update if rest requirements make cycle?
         thisTopic.requires.clear()
@@ -196,9 +211,19 @@ def topic(request, pk):
 
     # To delete the topic
     elif request.method == 'DELETE':
-        # Only allow staff to delete topics
-        if not request.user.is_staff:
+        # Only allow topic-creator or superuser to delete topic
+        # If this topic has an author:
+        if thisTopic.author:
+            # If requester is not thisTopic's author, and requester is not superuser
+            if (request.user.id != thisTopic.author.id and not request.user.is_superuser):
+                raise PermissionDenied()
+        # If this topic has no author, and requester is not superuser:
+        elif not request.user.is_superuser:
             raise PermissionDenied()
+        # Old System:
+        # # Only allow staff to delete topics
+        # if not request.user.is_staff:
+        #     raise PermissionDenied()
 
         thisTopic.delete()
         return Response(status=status.HTTP_200_OK)
@@ -264,6 +289,8 @@ def paths(request):
         if not request.user.is_staff:
             raise PermissionDenied()
 
+        # Add the author field as the requesting user
+        request.data["author"] = request.user.id
         serializer = PathListSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -287,16 +314,31 @@ def pathDetail(request, pk):
             
         queryset = Path.objects.prefetch_related(Prefetch('topic_sequence__topic__progress', queryset=TopicProgress.objects.filter(
             student=request.user.id), to_attr='filtered_progress')).get(id=pk)
-        print("Request by "+str(request.user))
+        print("Path get request by "+str(request.user))
         print("Requesting user's id is "+str(request.user.id))
         serializer = PathDetailRetrieveSerializer(queryset)
         return Response(serializer.data)
 
     # To update detail of a particular path
     elif request.method == 'PUT':
-        # Only allow staff to update paths
-        if not request.user.is_staff:
+        # Only allow path-creator or superuser to update path
+        # If this path has an author:
+        if thisPath.author:
+            # If requester is not thisPath's author, and requester is not superuser
+            if (request.user.id != thisPath.author.id and not request.user.is_superuser):
+                raise PermissionDenied()
+        # If this path has no author, and requester is not superuser:
+        elif not request.user.is_superuser:
             raise PermissionDenied()
+        # If this path has no auther, and requester is superuser, make him author
+        else:
+            request.data["author"] = request.user.id
+        # If the author is none (account deleted) and superuser is updating path, make them author
+        # if (thisPath.auth)
+        # Old System:
+        # # Only allow staff to update paths
+        # if not request.user.is_staff:
+        #     raise PermissionDenied()
 
         serializer = PathDetailSerializer(thisPath, data=request.data)
         if serializer.is_valid():
@@ -304,15 +346,24 @@ def pathDetail(request, pk):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # To delete the subject
+    # To delete the path
     elif request.method == 'DELETE':
-        # Only allow staff to delete paths
-        if not request.user.is_staff:
+        # Only allow path-creator or superuser to delete path
+        # If this path has an author:
+        if thisPath.author:
+            # If requester is not thisPath's author, and requester is not superuser
+            if (request.user.id != thisPath.author.id and not request.user.is_superuser):
+                raise PermissionDenied()
+        # If this path has no author, and requester is not superuser:
+        elif not request.user.is_superuser:
             raise PermissionDenied()
+        # Old System:
+        # # Only allow staff to delete paths
+        # if not request.user.is_staff:
+        #     raise PermissionDenied()
 
         thisPath.delete()
         return Response(status=status.HTTP_200_OK)
-
 
 @api_view(['GET'])
 def publishedPaths(request):
