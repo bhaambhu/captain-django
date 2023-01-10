@@ -9,11 +9,18 @@ class CaptainUserSUSerializer(serializers.ModelSerializer):
         fields = ('id', 'email', 'display_name', 'password', 'start_date', 'last_login', 'about', 'is_staff', 'is_active', 'is_superuser')
         extra_kwargs = {'password': {'write_only': True}}
 
+# The info only a user himself can see
 class CaptainUserInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = CaptainUser
         fields = ('email', 'display_name', 'about', 'is_active', 'start_date', 'last_login')
         read_only_fields = ['email', 'is_active', 'start_date', 'last_login']
+
+# Info visible to public
+class CaptainUserDisplaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CaptainUser
+        fields = ('id', 'display_name' )
 
 class CustomUserSerializer(serializers.ModelSerializer):
     """

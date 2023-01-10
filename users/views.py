@@ -91,7 +91,6 @@ def userInfo(request, pk):
         userObject.delete()
         return Response(status=status.HTTP_200_OK)
 
-
 class CustomUserCreate(APIView):
     permission_classes = [AllowAny]
 
