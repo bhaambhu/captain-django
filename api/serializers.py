@@ -4,7 +4,6 @@ from rest_framework import serializers
 from rest_framework.fields import BooleanField, CharField
 from rest_framework.relations import PrimaryKeyRelatedField
 from knowledge.models import Subject, Topic, Path, PathTopicSequence, TopicProgress
-from users.serializers import CaptainUserDisplaySerializer
 
 class ChildrenSerializer(serializers.ModelSerializer):
     # d_count = serializers.IntegerField(source='get_descendant_count')
@@ -13,10 +12,10 @@ class ChildrenSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'display_name', 'children')
 
 class TopicListSerializer(serializers.ModelSerializer):
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'author', 'subject', 'requires', 'breadcrumbs')
+        fields = ('id', 'title', 'about', 'author', 'authorName', 'subject', 'requires', 'breadcrumbs')
 
 class BreadcrumbSerializer(serializers.ModelSerializer):
     class Meta:
@@ -66,11 +65,11 @@ class TopicProgressSerializer(serializers.ModelSerializer):
         fields = ('verifiable', 'completed')
 
 class TopicListProgressSerializer(serializers.ModelSerializer):
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     progress = TopicProgressSerializer(many=True, source='filtered_progress')
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'author', 'requires', 'breadcrumbs', 'progress')
+        fields = ('id', 'title', 'about', 'author', 'authorName', 'requires', 'breadcrumbs', 'progress')
 
 class TopicProgressMinSerializer(serializers.ModelSerializer):
     progress = TopicProgressSerializer(many=True)
@@ -79,11 +78,11 @@ class TopicProgressMinSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'requires', 'progress')
 
 class TopicDetailSerializer(serializers.ModelSerializer):
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     requires = TopicProgressMinSerializer(many=True, read_only=True)
     class Meta:
         model = Topic
-        fields = ('id', 'title', 'about', 'author', 'requires', 'subject', 'breadcrumbs', 'assessor', 'steps' )
+        fields = ('id', 'title', 'about', 'author', 'authorName', 'requires', 'subject', 'breadcrumbs', 'assessor', 'steps' )
 
 class PathTopicSequenceProgressSerializer(serializers.ModelSerializer):
     topic = TopicListProgressSerializer()
@@ -93,10 +92,10 @@ class PathTopicSequenceProgressSerializer(serializers.ModelSerializer):
     
 class PathDetailRetrieveSerializer(serializers.ModelSerializer):
     topic_sequence = PathTopicSequenceProgressSerializer(many=True)
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     class Meta:
         model = Path
-        fields = ('id', 'published', 'title', 'about', 'author', 'topic_sequence')
+        fields = ('id', 'published', 'title', 'about', 'author', 'authorName', 'topic_sequence')
 
 class PathTopicSequenceSerializer(serializers.ModelSerializer):
     topic = TopicListSerializer()
@@ -105,11 +104,11 @@ class PathTopicSequenceSerializer(serializers.ModelSerializer):
         fields = ('order', 'topic')
 
 class PathDetailSerializer(serializers.ModelSerializer):
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     topic_sequence = PathTopicSequenceSerializer(many=True)
     class Meta:
         model = Path
-        fields = ('id', 'published', 'title', 'about', 'author', 'topic_sequence')
+        fields = ('id', 'published', 'title', 'about', 'author', 'authorName', 'topic_sequence')
     def update(self, instance, validated_data):
         
         # first save the Path meta info
@@ -134,10 +133,10 @@ class PathDetailSerializer(serializers.ModelSerializer):
         return instance
 
 class PathListSerializer(serializers.ModelSerializer):
-    author = CaptainUserDisplaySerializer()
+    authorName = serializers.CharField(source='author', read_only=True)
     class Meta:
         model = Path
-        fields = ('id', 'title', 'about', 'published', 'author')
+        fields = ('id', 'title', 'about', 'published', 'author', 'authorName')
 
 # class TopicSerializer(serializers.ModelSerializer):
 #     class Meta:

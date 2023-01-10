@@ -339,7 +339,6 @@ def pathDetail(request, pk):
         # # Only allow staff to update paths
         # if not request.user.is_staff:
         #     raise PermissionDenied()
-
         serializer = PathDetailSerializer(thisPath, data=request.data)
         if serializer.is_valid():
             serializer.save()

@@ -15,13 +15,7 @@ class CaptainUserInfoSerializer(serializers.ModelSerializer):
         model = CaptainUser
         fields = ('email', 'display_name', 'about', 'is_active', 'start_date', 'last_login')
         read_only_fields = ['email', 'is_active', 'start_date', 'last_login']
-
-# Info visible to public
-class CaptainUserDisplaySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CaptainUser
-        fields = ('id', 'display_name' )
-
+        
 class CustomUserSerializer(serializers.ModelSerializer):
     """
     Currently unused in preference of the below.
