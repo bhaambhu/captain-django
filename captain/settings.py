@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import mimetypes
 from datetime import timedelta
+from decouple import config, Csv
 
 mimetypes.add_type("text/css", ".css", True)
 
@@ -25,12 +26,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-otsr9jw75hgp@yao2iddyq8ql&&x02kc5y&jn0l+g^y68oum+2'
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['127.0.0.1', 'captain-django-production.up.railway.app']
+# ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'captain-django-production.up.railway.app']
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=[], cast=Csv())
+
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', cast=Csv())
+# CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://localhost:19006', 'https://captain-nextjs-bhaambhu.vercel.app']
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
 
 
 # Application definition
@@ -66,8 +72,6 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
-CSRF_TRUSTED_ORIGINS = ['https://captain-django-production.up.railway.app']
-
 ROOT_URLCONF = 'captain.urls'
 
 TEMPLATES = [
@@ -98,11 +102,11 @@ WSGI_APPLICATION = 'captain.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'railway',
-        'USER': 'postgres',
-        'PASSWORD': 'xjRpQy07bniPmRbHVe1X',
-        'HOST': 'containers-us-west-171.railway.app',
-        'PORT': '5605',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
     }
 }
 
@@ -145,9 +149,11 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
+# Extra directories to look for when running collectstatic function, other than every app's static folder
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static_root')
+# Folder from where nginx supplies static assets
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
@@ -165,10 +171,6 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", "http://localhost:19006", "https://captain-nextjs-hazel.vercel.app"
-]
-
 # Custom user model
 AUTH_USER_MODEL = 'users.CaptainUser'
 
@@ -179,7 +181,7 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
+    'SIGNING_KEY': config('SECRET_KEY'),
     'VERIFYING_KEY': None,
     'AUTH_HEADER_TYPES': ('JWT',),
     'USER_ID_FIELD': 'id',
